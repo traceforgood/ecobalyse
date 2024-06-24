@@ -1,0 +1,51 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - europe-west9-docker.pkg.dev/tfg-production/traceforgood/ecobalyse:${SHORT_SHA}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - europe-west9-docker.pkg.dev/tfg-production/traceforgood/ecobalyse:${SHORT_SHA}
+  - name: google/cloud-sdk:alpine
+    args:
+      - gcloud
+      - container
+      - images
+      - add-tag
+      - europe-west9-docker.pkg.dev/tfg-production/traceforgood/ecobalyse:${SHORT_SHA}
+      - europe-west9-docker.pkg.dev/tfg-production/traceforgood/ecobalyse:latest
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: sh
+    args:
+      - -c
+      - >-
+        sed -ibak "s/#DOCKER_IMAGE_TAG#/${SHORT_SHA}/" .cloudrun/${_ENV_NAME}.yaml && cat
+        .cloudrun/${_ENV_NAME}.yaml
+  - name: google/cloud-sdk:alpine
+    args:
+      - gcloud
+      - run
+      - services
+      - replace
+      - .cloudrun/${_ENV_NAME}.yaml
+      - --region
+      - europe-west9
+  - name: google/cloud-sdk:alpine
+    args:
+      - gcloud
+      - run
+      - services
+      - add-iam-policy-binding
+      - ecobalyse-${_ENV_NAME}
+      - --member
+      - allUsers
+      - --role
+      - roles/run.invoker
+      - --region
+      - europe-west9
+# No cache export, doing it in CI is enough
+options:
+  machineType: 'N1_HIGHCPU_8'
